@@ -59,18 +59,14 @@ app.post("/api/getPaymentMethods", async (req, res) => {
 
 // Submitting a payment
 app.post("/api/initiatePayment", async (req, res) => {
-  const currency = "EUR";
-
   try {
-    // unique ref for the transaction
-    const orderRef = uuid();
     // Ideally the data passed here should be computed based on business logic
     const response = await checkout.payments({
-      amount: { currency, value: 1000 }, // value is 10€ in minor units
-      reference: orderRef, // required
-      merchantAccount: process.env.MERCHANT_ACCOUNT, // required
       channel: "Web", // required
-      paymentMethod: req.body.paymentMethod,
+      merchantAccount: process.env.MERCHANT_ACCOUNT, // required
+      reference: uuid(), // required
+      amount: { currency: "EUR", value: 1000 }, // value is 10€ in minor units
+      paymentMethod: req.body.paymentMethod, // required
     });
 
     res.json(response);

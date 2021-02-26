@@ -1,4 +1,5 @@
 let request;
+
 async function init() {
   try {
     const paymentMethodsResponse = await callServer("/api/getPaymentMethods");
@@ -13,9 +14,12 @@ init();
 
 async function checkout() {
   try {
+    // show payment dialog
     const paymentResponse = await request.show();
     // Here we would process the payment.
     const res = await callServer("/api/initiatePayment", {
+      // This works only for PCI compliant credit card payments.
+      // For non PCI compliant payments the data needs to be encrypted with something like https://github.com/Adyen/adyen-cse-web
       paymentMethod: {
         type: "scheme",
         number: paymentResponse.details.cardNumber,
@@ -25,6 +29,7 @@ async function checkout() {
         cvc: paymentResponse.details.cardSecurityCode,
       },
     });
+    // Handle the response code
     switch (res.resultCode) {
       case "Authorised":
         await paymentResponse.complete("success");
@@ -46,14 +51,17 @@ async function checkout() {
     }
   } catch (error) {
     console.error(error);
+    alert("Error occurred. Look at console for details");
   }
   return false;
 }
 
+// Mastercard id is not same for adyen and Payment Request API
 function fixMasterCard(v) {
   return v === "mc" ? "mastercard" : v;
 }
 
+// compare supported cards between Adyen and Payment Request API and get the intersection
 function getSupportedNetworksFromAdyen(paymentMethodsResponse) {
   const cardOpts = paymentMethodsResponse.paymentMethods.filter((v) => v.type === "scheme")[0];
   const supportedByPaymentAPI = ["amex", "cartebancaire", "diners", "discover", "jcb", "mc", "mir", "unionpay", "visa"];
