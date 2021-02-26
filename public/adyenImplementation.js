@@ -1,57 +1,46 @@
-let request;
-
-async function init() {
-  try {
-    const paymentMethodsResponse = await callServer("/api/getPaymentMethods");
-    request = new PaymentRequest(buildSupportedPaymentMethodData(paymentMethodsResponse), buildShoppingCartDetails());
-  } catch (error) {
-    console.error(error);
-    alert("Error occurred. Look at console for details");
-  }
-}
-
-init();
-
 async function checkout() {
   try {
+    const adyenPaymentMethods = await callServer("/api/getPaymentMethods");
+    // create a new payment request
+    const request = new PaymentRequest(buildSupportedPaymentMethodData(adyenPaymentMethods), buildShoppingCartDetails());
     // show payment dialog
-    const paymentResponse = await request.show();
+    const payment = await request.show();
     // Here we would process the payment.
-    const res = await callServer("/api/initiatePayment", {
+    const response = await callServer("/api/initiatePayment", {
       // This works only for PCI compliant credit card payments.
       // For non PCI compliant payments the data needs to be encrypted with something like https://github.com/Adyen/adyen-cse-web
       paymentMethod: {
         type: "scheme",
-        number: paymentResponse.details.cardNumber,
-        expiryMonth: paymentResponse.details.expiryMonth,
-        expiryYear: paymentResponse.details.expiryYear,
-        holderName: paymentResponse.details.cardholderName,
-        cvc: paymentResponse.details.cardSecurityCode,
+        number: payment.details.cardNumber,
+        expiryMonth: payment.details.expiryMonth,
+        expiryYear: payment.details.expiryYear,
+        holderName: payment.details.cardholderName,
+        cvc: payment.details.cardSecurityCode,
       },
     });
     // Handle the response code
-    switch (res.resultCode) {
+    switch (response.resultCode) {
       case "Authorised":
-        await paymentResponse.complete("success");
+        await payment.complete("success");
         window.location.href = "/result/success";
         break;
       case "Pending":
       case "Received":
-        await paymentResponse.complete("unknown");
+        await payment.complete("unknown");
         window.location.href = "/result/pending";
         break;
       case "Refused":
-        await paymentResponse.complete("fail");
+        await payment.complete("fail");
         window.location.href = "/result/failed";
         break;
       default:
-        await paymentResponse.complete("fail");
+        await payment.complete("fail");
         window.location.href = "/result/error";
         break;
     }
   } catch (error) {
     console.error(error);
-    alert("Error occurred. Look at console for details");
+    alert(`Error occurred: ${error.message}`);
   }
   return false;
 }
@@ -62,18 +51,18 @@ function fixMasterCard(v) {
 }
 
 // compare supported cards between Adyen and Payment Request API and get the intersection
-function getSupportedNetworksFromAdyen(paymentMethodsResponse) {
-  const cardOpts = paymentMethodsResponse.paymentMethods.filter((v) => v.type === "scheme")[0];
+function getSupportedNetworksFromAdyen(adyenPaymentMethods) {
   const supportedByPaymentAPI = ["amex", "cartebancaire", "diners", "discover", "jcb", "mc", "mir", "unionpay", "visa"];
+  const cardOpts = adyenPaymentMethods.paymentMethods.filter((v) => v.type === "scheme")[0];
   return supportedByPaymentAPI.reduce((acc, curr) => (cardOpts.brands.includes(curr) ? [...acc, fixMasterCard(curr)] : acc), []);
 }
 
-function buildSupportedPaymentMethodData(paymentMethodsResponse) {
+function buildSupportedPaymentMethodData(adyenPaymentMethods) {
   return [
     {
       supportedMethods: "basic-card",
       data: {
-        supportedNetworks: getSupportedNetworksFromAdyen(paymentMethodsResponse),
+        supportedNetworks: getSupportedNetworksFromAdyen(adyenPaymentMethods),
         supportedTypes: ["credit"],
       },
     },
