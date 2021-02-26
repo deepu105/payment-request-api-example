@@ -3,12 +3,14 @@ async function checkout() {
     const adyenPaymentMethods = await callServer("/api/getPaymentMethods");
     // create a new payment request
     const request = new PaymentRequest(buildSupportedPaymentMethodData(adyenPaymentMethods), buildShoppingCartDetails());
-    // show payment dialog
+    // show payment sheet
     const payment = await request.show();
-    // Here we would process the payment.
+
+    // Here we would process the Adyen payment.
     const response = await callServer("/api/initiatePayment", {
       // This works only for PCI compliant credit card payments.
       // For non PCI compliant payments the data needs to be encrypted with something like https://github.com/Adyen/adyen-cse-web
+      // But encrypting data here is not secure as a malicious script may be able to access the data in memory here
       paymentMethod: {
         type: "scheme",
         number: payment.details.cardNumber,
@@ -45,30 +47,6 @@ async function checkout() {
   return false;
 }
 
-// Mastercard id is not same for adyen and Payment Request API
-function fixMasterCard(v) {
-  return v === "mc" ? "mastercard" : v;
-}
-
-// compare supported cards between Adyen and Payment Request API and get the intersection
-function getSupportedNetworksFromAdyen(adyenPaymentMethods) {
-  const supportedByPaymentAPI = ["amex", "cartebancaire", "diners", "discover", "jcb", "mc", "mir", "unionpay", "visa"];
-  const cardOpts = adyenPaymentMethods.paymentMethods.filter((v) => v.type === "scheme")[0];
-  return supportedByPaymentAPI.reduce((acc, curr) => (cardOpts.brands.includes(curr) ? [...acc, fixMasterCard(curr)] : acc), []);
-}
-
-function buildSupportedPaymentMethodData(adyenPaymentMethods) {
-  return [
-    {
-      supportedMethods: "basic-card",
-      data: {
-        supportedNetworks: getSupportedNetworksFromAdyen(adyenPaymentMethods),
-        supportedTypes: ["credit"],
-      },
-    },
-  ];
-}
-
 function buildShoppingCartDetails() {
   // Hardcoded for demo purposes:
   return {
@@ -88,6 +66,32 @@ function buildShoppingCartDetails() {
       amount: { currency: "EUR", value: "10.00" },
     },
   };
+}
+
+function buildSupportedPaymentMethodData(adyenPaymentMethods) {
+  return [
+    {
+      supportedMethods: "basic-card",
+      data: {
+        supportedNetworks: getSupportedNetworksFromAdyen(adyenPaymentMethods),
+        supportedTypes: ["credit"],
+      },
+    },
+  ];
+}
+
+// compare supported cards between Adyen and Payment Request API and get the intersection
+function getSupportedNetworksFromAdyen(adyenPaymentMethods) {
+  const supportedByPaymentAPI = ["amex", "cartebancaire", "diners", "discover", "jcb", "mc", "mir", "unionpay", "visa"];
+  // filter supported credit cards
+  const supportedByAdyen = adyenPaymentMethods.paymentMethods.filter((v) => v.type === "scheme")[0].brands;
+  // get only the intersection between supportedByPaymentAPI and supportedByAdyen
+  return supportedByPaymentAPI.reduce((acc, curr) => (supportedByAdyen.includes(curr) ? [...acc, fixMasterCard(curr)] : acc), []);
+}
+
+// Mastercard id is not same for Adyen and Payment Request API
+function fixMasterCard(v) {
+  return v === "mc" ? "mastercard" : v;
 }
 
 // Calls your server endpoints
