@@ -6,6 +6,12 @@ async function checkout() {
     // show payment sheet
     const payment = await request.show();
 
+    // This payment method handles everything and returns a final result
+    if (payment.details.bobpay_token_id) {
+      await payment.complete("success");
+      window.location.href = "/result/success";
+      return false;
+    }
     // Here we would process the Adyen payment.
     const response = await callServer("/api/initiatePayment", {
       // This works only for PCI compliant credit card payments.
@@ -76,6 +82,10 @@ function buildSupportedPaymentMethodData(adyenPaymentMethods) {
         supportedNetworks: getSupportedNetworksFromAdyen(adyenPaymentMethods),
         supportedTypes: ["credit"],
       },
+    },
+    // you need to install the service worker from https://bobpay.xyz/ for this to show up
+    {
+      supportedMethods: "https://bobpay.xyz/pay",
     },
   ];
 }
